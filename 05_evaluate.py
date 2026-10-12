@@ -17,6 +17,8 @@ ft = importlib.import_module("04_finetune")
 
 def main():
     keep_awake()
+    device = ft.pick_device()
+    print(f"device: {device}", flush=True)
     data = ft.load_images()
     split = np.array(data["split"])
     sel = {s: torch.from_numpy(split == s) for s in ["val", "test"]}
@@ -32,7 +34,8 @@ def main():
             print(f"skip {run.name}: probs.npz exists", flush=True)
             continue
         model = ft.SeedClassifier(run.name.split("_seed")[0])
-        model.load_state_dict(torch.load(best))
+        model.load_state_dict(torch.load(best, map_location="cpu"))
+        model.place(device)
         res = {f"y_{s}": y[s] for s in x}
         for s in x:
             res[f"{s}_plain"] = predict_probs(model, x[s], ft.normalize, use_tta=False)

@@ -1,0 +1,108 @@
+{
+  "threshold": 0.5,
+  "seed_average": {
+    "qcnn_plain": {
+      "mean": 0.9362962962962964,
+      "std": 0.003394500514782065,
+      "per_seed": {
+        "0": 0.9355555555555556,
+        "1": 0.94,
+        "2": 0.9333333333333333
+      }
+    },
+    "qcnn_tta": {
+      "mean": 0.9348148148148149,
+      "std": 0.0012830005981991767,
+      "per_seed": {
+        "0": 0.9333333333333333,
+        "1": 0.9355555555555556,
+        "2": 0.9355555555555556
+      }
+    },
+    "classical_plain": {
+      "mean": 0.9348148148148149,
+      "std": 0.005132002392796707,
+      "per_seed": {
+        "0": 0.9288888888888889,
+        "1": 0.9377777777777778,
+        "2": 0.9377777777777778
+      }
+    },
+    "classical_tta": {
+      "mean": 0.9407407407407407,
+      "std": 0.0012830005981991767,
+      "per_seed": {
+        "0": 0.94,
+        "1": 0.9422222222222222,
+        "2": 0.94
+      }
+    }
+  },
+  "final": {
+    "qcnn": {
+      "accuracy": 0.9333333333333333,
+      "ci95": [
+        0.9088888888888889,
+        0.9555555555555556
+      ]
+    },
+    "classical": {
+      "accuracy": 0.9422222222222222,
+      "ci95": [
+        0.92,
+        0.9622222222222222
+      ]
+    }
+  },
+  "mcnemar": [
+    {
+      "a": "qcnn final",
+      "b": "classical final",
+      "only_a_right": 1,
+      "only_b_right": 5,
+      "p_value": 0.21875
+    },
+    {
+      "a": "qcnn seed 0, no TTA",
+      "b": "classical seed 0, no TTA",
+      "only_a_right": 8,
+      "only_b_right": 5,
+      "p_value": 0.5810546875
+    },
+    {
+      "a": "qcnn seed 0, TTA",
+      "b": "classical seed 0, TTA",
+      "only_a_right": 2,
+      "only_b_right": 5,
+      "p_value": 0.453125
+    },
+    {
+      "a": "qcnn seed 1, no TTA",
+      "b": "classical seed 1, no TTA",
+      "only_a_right": 7,
+      "only_b_right": 6,
+      "p_value": 1.0
+    },
+    {
+      "a": "qcnn seed 1, TTA",
+      "b": "classical seed 1, TTA",
+      "only_a_right": 2,
+      "only_b_right": 5,
+      "p_value": 0.453125
+    },
+    {
+      "a": "qcnn seed 2, no TTA",
+      "b": "classical seed 2, no TTA",
+      "only_a_right": 6,
+      "only_b_right": 8,
+      "p_value": 0.79052734375
+    },
+    {
+      "a": "qcnn seed 2, TTA",
+      "b": "classical seed 2, TTA",
+      "only_a_right": 3,
+      "only_b_right": 5,
+      "p_value": 0.7265625
+    }
+  ]
+}

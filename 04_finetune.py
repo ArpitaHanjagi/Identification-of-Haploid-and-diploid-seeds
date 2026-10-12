@@ -10,6 +10,10 @@ Heads (both take the 512-d ResNet18 feature through the same 512 -> 8 linear lay
 
 The model is selected on validation accuracy; the test set is scored once, at the
 end. A checkpoint is written every epoch, so an interrupted run resumes.
+
+The ResNet18 runs on the GPU when there is one (CUDA, or Apple MPS); the head always
+runs on the CPU. It is tiny, and the quantum simulator works in float64/complex128,
+which consumer GPUs run slowly and MPS does not support.
 """
 import argparse
 import json
@@ -58,6 +62,16 @@ augment = v2.Compose([
 normalize = v2.Compose([v2.ToDtype(torch.float32, scale=True), v2.Normalize(MEAN, STD)])
 
 
+def pick_device(name="auto"):
+    if name != "auto":
+        return torch.device(name)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 class SeedClassifier(nn.Module):
     def __init__(self, head: str):
         super().__init__()
@@ -70,9 +84,18 @@ class SeedClassifier(nn.Module):
             self.head = nn.Sequential(nn.Sigmoid(), nn.Linear(QCNN_QUBITS, 2))
         else:
             raise ValueError(head)
+        self.device = torch.device("cpu")
+
+    def place(self, device):
+        """Move the CNN to `device`; the head stays on the CPU. Use this instead of .to()."""
+        self.device = torch.device(device)
+        self.backbone.to(self.device)
+        self.reduce.to(self.device)
+        return self
 
     def forward(self, x):
-        return self.head(self.reduce(self.backbone(x)))
+        """Takes a CPU batch and returns CPU logits, whatever device the CNN is on."""
+        return self.head(self.reduce(self.backbone(x.to(self.device))).cpu())
 
 
 def batches(images, labels, batch_size, train, gen=None):
@@ -100,10 +123,16 @@ def main():
     ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--smoke", action="store_true", help="tiny subset, to test the script end to end")
+    ap.add_argument("--device", default="auto", help="auto (default), cuda, mps or cpu")
     args = ap.parse_args()
 
     keep_awake()
     torch.set_num_threads(4)
+    device = pick_device(args.device)
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+    print(f"device: {device}" + (f" ({torch.cuda.get_device_name(device)})" if device.type == "cuda" else ""),
+          flush=True)
     run_dir = RESULTS_DIR / ("finetune_smoke" if args.smoke else "finetune") / f"{args.head}_seed{args.seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -118,7 +147,7 @@ def main():
 
     torch.manual_seed(args.seed)
     gen = torch.Generator().manual_seed(args.seed)
-    model = SeedClassifier(args.head)
+    model = SeedClassifier(args.head).place(device)
     # The circuit and its readout need a much larger learning rate than the CNN
     # (0.05 vs 3e-4); with 0.01 the QCNN failed to learn in tests.
     opt = torch.optim.AdamW([
@@ -135,15 +164,17 @@ def main():
     ckpt_path = run_dir / "checkpoint.pt"
     start, history, best = 1, [], {"val_acc": -1.0, "val_loss": float("inf"), "epoch": 0}
     if ckpt_path.exists():
-        ck = torch.load(ckpt_path, weights_only=False)
+        ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         if ck.get("epochs", args.epochs) != args.epochs:
             raise SystemExit(f"checkpoint was made with --epochs {ck['epochs']}; rerun with the same value "
                              f"or delete {run_dir}")
         model.load_state_dict(ck["model"])
-        opt.load_state_dict(ck["opt"])
+        opt.load_state_dict(ck["opt"])  # moves the optimizer state to each parameter's device
         sched.load_state_dict(ck["sched"])
         gen.set_state(ck["gen"])
         torch.set_rng_state(ck["rng"])
+        if ck.get("cuda_rng") is not None and device.type == "cuda":
+            torch.cuda.set_rng_state_all(ck["cuda_rng"])
         start, history, best = ck["epoch"] + 1, ck["history"], ck["best"]
         print(f"resuming from epoch {ck['epoch']}", flush=True)
 
@@ -169,20 +200,23 @@ def main():
             best = {"val_acc": val_acc, "val_loss": val_loss, "epoch": epoch}
             torch.save(model.state_dict(), run_dir / "best_model.pt")
         torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
-                    "gen": gen.get_state(), "rng": torch.get_rng_state(), "epoch": epoch, "epochs": args.epochs,
-                    "history": history, "best": best}, ckpt_path)
+                    "gen": gen.get_state(), "rng": torch.get_rng_state(),
+                    "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
+                    "epoch": epoch, "epochs": args.epochs, "history": history, "best": best}, ckpt_path)
         print(f"{args.head} seed {args.seed} epoch {epoch}/{args.epochs}: train acc {correct / seen:.4f}  "
               f"val acc {val_acc:.4f}  val loss {val_loss:.4f}{'  *best*' if improved else ''}  "
               f"({time.time() - t0:.0f}s)", flush=True)
 
     # Final: best-by-validation model, scored once on the untouched test set.
-    model.load_state_dict(torch.load(run_dir / "best_model.pt"))
+    model.load_state_dict(torch.load(run_dir / "best_model.pt", map_location="cpu"))
     _, test_acc, prob = evaluate(model, x["test"], y["test"], loss_fn)
     from sklearn.metrics import confusion_matrix, matthews_corrcoef, roc_auc_score
     yt = y["test"].numpy()
     tn, fp, fn, tp = confusion_matrix(yt, (prob >= 0.5).astype(int), labels=[0, 1]).ravel()
     result = {
-        "head": args.head, "seed": args.seed, "best_epoch": best["epoch"], "val_acc": best["val_acc"],
+        "head": args.head, "seed": args.seed, "best_epoch": best["epoch"],
+        "device": torch.cuda.get_device_name(device) if device.type == "cuda" else str(device),
+        "val_acc": best["val_acc"],
         "test_accuracy": test_acc, "sensitivity": tp / (tp + fn), "specificity": tn / (tn + fp),
         "precision": tp / (tp + fp), "f1": 2 * tp / (2 * tp + fp + fn), "fnr": fn / (tp + fn),
         "auc": roc_auc_score(yt, prob), "mcc": matthews_corrcoef(yt, (prob >= 0.5).astype(int)),

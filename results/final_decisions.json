@@ -1,0 +1,26 @@
+{
+  "qcnn": {
+    "tta": true,
+    "use_ensemble": false,
+    "seed": 0,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "threshold": 0.5,
+    "val_accuracy": 0.9577777777777777
+  },
+  "classical": {
+    "tta": true,
+    "use_ensemble": true,
+    "seed": 0,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "threshold": 0.5,
+    "val_accuracy": 0.9622222222222222
+  }
+}

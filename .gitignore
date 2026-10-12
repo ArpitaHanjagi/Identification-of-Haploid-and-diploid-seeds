@@ -7,3 +7,10 @@ __pycache__/
 !.env.example
 .claude/
 .superpowers/
+
+# Large or temporary outputs; the scripts recreate them. Trained weights (best_model.pt,
+# about 45 MB each) are too large for git; share them separately if needed.
+results/**/*.pt
+results/finetune_smoke/
+results/resnet50_features.npz
+results/feature_parts/

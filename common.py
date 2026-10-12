@@ -1,5 +1,6 @@
 """Shared paths, settings and model definitions for the maize ploidy experiments."""
 import ctypes
+import os
 import sys
 from pathlib import Path
 
@@ -7,7 +8,11 @@ import pennylane as qml
 import torch
 from torch import nn
 
-DATA_DIR = Path(r"C:\Users\arpit\Downloads\haploid_and_diploid_maize_seeds_dataset")
+# Folder with haploid/ and diploid/ subfolders. Set HAPLOID_DATA_DIR to use another
+# location (the Kaggle notebook does this).
+DATA_DIR = Path(os.environ.get(
+    "HAPLOID_DATA_DIR",
+    r"S:\Codes and Programs\Programs\Dev\Haploid_Diploid_Classification\haploid_and_diploid_maize_seeds_dataset"))
 PROJECT_DIR = Path(__file__).resolve().parent
 SPLITS_CSV = PROJECT_DIR / "results" / "splits.csv"
 FEATURES_NPZ = PROJECT_DIR / "results" / "resnet50_features.npz"
