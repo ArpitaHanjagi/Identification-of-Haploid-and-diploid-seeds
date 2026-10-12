@@ -100,6 +100,15 @@ foreach ($h in "qcnn", "classical") { foreach ($s in 0, 1, 2) {
 .\.venv\Scripts\python.exe 06_report.py                            # final table, decisions, statistics, figures
 ```
 
+To classify photos with the trained models (each head's final configuration, with TTA):
+
+```powershell
+.\.venv\Scripts\python.exe predict.py photo1.jpg photo2.jpg           # or a folder of photos
+.\.venv\Scripts\python.exe predict.py --from-test 10                  # random test photos, with true labels
+.\.venv\Scripts\python.exe predict.py --from-test 450                 # whole test set: 420 of 450 (93.3%)
+.\.venv\Scripts\python.exe predict.py --from-test 10 --head classical
+```
+
 - **Run time:** on the GTX 1650, the 6 training runs take about 25 minutes in total (13 s per epoch
   for the classical head, 22 s for the QCNN).
 - **Interruptions:** each run saves a checkpoint every epoch and resumes if interrupted.
