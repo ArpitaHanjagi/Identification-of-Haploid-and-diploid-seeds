@@ -12,14 +12,14 @@ import argparse
 import importlib
 import json
 import warnings
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import numpy as np
 import pandas as pd
 import torch
 from PIL import Image, ImageOps
 
-from common import RESULTS_DIR, SPLITS_CSV
+from common import DATA_DIR, RESULTS_DIR, SPLITS_CSV
 from tta import predict_probs
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -42,6 +42,18 @@ def expand(paths):
     return out
 
 
+def locate(path, cls):
+    """splits.csv holds absolute paths from the PC that made the split. On another PC, look for
+    the same file under DATA_DIR/<class>/ instead (set HAPLOID_DATA_DIR to the dataset folder)."""
+    if Path(path).exists():
+        return Path(path)
+    moved = DATA_DIR / cls / PureWindowsPath(path).name
+    if not moved.exists():
+        raise SystemExit(f"cannot find {PureWindowsPath(path).name}: set HAPLOID_DATA_DIR to the folder "
+                         f"that holds the haploid/ and diploid/ subfolders (now: {DATA_DIR})")
+    return moved
+
+
 def final_choice(head):
     """Seeds, TTA and threshold that 06_report.py chose for this head on validation."""
     d = json.loads((RESULTS_DIR / "final_decisions.json").read_text())[head]
@@ -56,6 +68,7 @@ def main():
     ap.add_argument("--no-tta", action="store_true", help="judge each photo once instead of 8 ways")
     ap.add_argument("--from-test", type=int, metavar="N", help="pick N random photos from the test set")
     ap.add_argument("--sample-seed", type=int, default=0, help="which random test photos --from-test picks")
+    ap.add_argument("--device", default="auto", help="auto (default), cuda, mps or cpu")
     args = ap.parse_args()
 
     seeds, tta, threshold = final_choice(args.head)
@@ -65,13 +78,13 @@ def main():
     if args.from_test:
         test = pd.read_csv(SPLITS_CSV).query("split == 'test'")
         test = test.sample(min(args.from_test, len(test)), random_state=args.sample_seed)
-        paths, truth = [Path(p) for p in test["path"]], test["class"].tolist()
+        paths, truth = [locate(p, c) for p, c in zip(test["path"], test["class"])], test["class"].tolist()
     else:
         paths, truth = expand(args.photos), None
     if not paths:
         ap.error("give photo files, a folder, or --from-test N")
 
-    device = ft.pick_device()
+    device = ft.pick_device(args.device)
     images = torch.stack([load_photo(p) for p in paths])
     probs = []
     for s in seeds:

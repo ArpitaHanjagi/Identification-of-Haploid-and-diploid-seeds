@@ -120,6 +120,48 @@ To classify photos with the trained models (each head's final configuration, wit
 - **No local GPU:** [kaggle_train.ipynb](kaggle_train.ipynb) runs the whole pipeline on a free Kaggle
   GPU.
 
+## Using the trained models on another PC
+
+No GPU is needed: `predict.py --device cpu` classifies 10 photos (with TTA) in about 12 seconds.
+
+1. **Get the code:** `git clone https://github.com/ArpitaHanjagi/Identification-of-Haploid-and-diploid-seeds.git`.
+   The repository is private, so you need access. Alternatively, copy the project folder without
+   `.venv` (a virtual environment doesn't work after being moved).
+2. **Get the trained models** from release `v1.0` and put each one where the scripts expect it:
+
+   ```powershell
+   gh release download v1.0 --repo ArpitaHanjagi/Identification-of-Haploid-and-diploid-seeds --pattern "*.pt"
+   foreach ($r in "qcnn_seed0","qcnn_seed1","qcnn_seed2","classical_seed0","classical_seed1","classical_seed2") {
+       New-Item -ItemType Directory -Force "results\finetune\$r" | Out-Null
+       Move-Item "$r.pt" "results\finetune\$r\best_model.pt"
+   }
+   ```
+
+   The final QCNN model needs only `qcnn_seed0.pt`; the final classical model is the average of all
+   three classical seeds.
+3. **Install Python 3.12 and the packages:**
+
+   ```powershell
+   py -3.12 -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt          # NVIDIA GPU on Windows
+   ```
+
+   Without an NVIDIA GPU, install the smaller CPU build of PyTorch instead:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu
+   .\.venv\Scripts\python.exe -m pip install pennylane scikit-learn scipy pandas matplotlib pillow
+   ```
+
+4. **ResNet18's ImageNet weights** (45 MB) download automatically the first time, which needs
+   internet once. For an offline PC, copy `%USERPROFILE%\.cache\torch\hub\checkpoints\resnet18-f37072fd.pth`
+   to the same place on the new PC.
+5. **The dataset** is only needed for `--from-test` and for retraining. Copy it, then point the code
+   at it: `$env:HAPLOID_DATA_DIR = "D:\path\to\haploid_and_diploid_maize_seeds_dataset"`.
+   `results/splits.csv` stores the original PC's paths; `predict.py` finds each file by name under
+   that folder instead.
+6. **Run it:** `.\.venv\Scripts\python.exe predict.py --from-test 10` or `predict.py photo.jpg`.
+
 ## Outputs (`results/`)
 
 - `final_table.csv`: every run (with and without TTA), the final models and the Altuntaş reference.
