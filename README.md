@@ -150,7 +150,7 @@ No GPU is needed: `predict.py --device cpu` classifies 10 photos (with TTA) in a
 
    ```powershell
    .\.venv\Scripts\python.exe -m pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu
-   .\.venv\Scripts\python.exe -m pip install pennylane scikit-learn scipy pandas matplotlib pillow
+   .\.venv\Scripts\python.exe -m pip install pennylane==0.45.1 scikit-learn==1.9.1 scipy==1.18.1 pandas==3.0.6 numpy==2.5.2 matplotlib==3.11.2 pillow==12.3.0
    ```
 
 4. **ResNet18's ImageNet weights** (45 MB) download automatically the first time, which needs
@@ -161,6 +161,45 @@ No GPU is needed: `predict.py --device cpu` classifies 10 photos (with TTA) in a
    `results/splits.csv` stores the original PC's paths; `predict.py` finds each file by name under
    that folder instead.
 6. **Run it:** `.\.venv\Scripts\python.exe predict.py --from-test 10` or `predict.py photo.jpg`.
+
+## Training on another PC (with or without a GPU)
+
+Set up the code and Python packages as in steps 1 and 3 above (the dataset is required). The code picks
+CUDA, Apple MPS or the CPU automatically. On a Mac, `pip install torch torchvision` plus the pinned
+packages above is enough.
+
+A copied or cloned folder already contains the reported run's results, so two things need doing
+first:
+
+- **Rename the old results.** Otherwise `05_evaluate.py` skips every run whose `probs.npz` already
+  exists, and the report would show the old numbers.
+- **Re-make the split.** `results/splits.csv` holds the original PC's paths, so run
+  `01_make_splits.py` again. It sorts the same file names with the same seed and gives the same
+  split. Check that the test set is 184 haploid + 266 diploid.
+
+```powershell
+Rename-Item results results_gtx1650                    # keep the reported run as a backup
+$env:HAPLOID_DATA_DIR = "D:\path\to\haploid_and_diploid_maize_seeds_dataset"
+$env:PYTHONWARNINGS = "ignore"
+.\.venv\Scripts\python.exe 01_make_splits.py
+.\.venv\Scripts\python.exe 04_finetune.py --head qcnn --seed 0 --epochs 1 --smoke   # prints the device used
+
+foreach ($h in "qcnn", "classical") { foreach ($s in 0, 1, 2) {
+    .\.venv\Scripts\python.exe -u 04_finetune.py --head $h --seed $s --epochs 12
+} }
+.\.venv\Scripts\python.exe 05_evaluate.py
+.\.venv\Scripts\python.exe 06_report.py
+```
+
+| Hardware | Training, 6 runs | Evaluation + report |
+|---|---|---|
+| NVIDIA GTX 1650 (measured) | about 25 min | a few minutes |
+| 4-core laptop CPU, no GPU (estimated from measured batch times) | about 4 hours (about 35–40 min per run) | about 20 min |
+
+- **No GPU:** keep the PC plugged in. Windows is kept awake automatically; on a Mac, prefix commands
+  with `caffeinate -i`. `04_finetune.py` uses 4 CPU threads (`torch.set_num_threads(4)`).
+- **Different results:** a retrain on different hardware gives results within about a point of the
+  reported ones. Don't mix runs from different machines in one table.
 
 ## Outputs (`results/`)
 
