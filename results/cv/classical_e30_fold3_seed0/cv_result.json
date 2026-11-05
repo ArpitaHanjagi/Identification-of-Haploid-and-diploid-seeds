@@ -1,0 +1,16 @@
+{
+  "head": "classical",
+  "epochs": 30,
+  "fold": 3,
+  "folds": 5,
+  "seed": 0,
+  "n_train": 2040,
+  "n_val": 510,
+  "best_epoch": 20,
+  "final_train_acc": 0.9828431372549019,
+  "device": "NVIDIA GeForce GTX 1650",
+  "last_plain_accuracy": 0.9490196078431372,
+  "last_tta_accuracy": 0.9431372549019608,
+  "best_plain_accuracy": 0.9549019607843138,
+  "best_tta_accuracy": 0.9509803921568627
+}

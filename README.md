@@ -36,8 +36,9 @@ Test accuracy averaged over 3 seeds (mean ± sample std):
   and the same 512 → 8 layer (4,104 parameters), which do almost all of the work.
 
 In short, a compact 8-qubit QCNN can replace a small classical classifier head with no measurable loss
-of accuracy, but it brings no accuracy or efficiency gain on this task. Ideas for further experiments
-are in [FUTURE_SCOPE.md](FUTURE_SCOPE.md).
+of accuracy, but it brings no accuracy or efficiency gain on this task. A later 5-fold
+cross-validation on the non-test images agrees (see [Cross-validation](#cross-validation-follow-up-experiment)).
+Ideas for further experiments are in [FUTURE_SCOPE.md](FUTURE_SCOPE.md).
 
 ## Dataset
 
@@ -200,6 +201,52 @@ foreach ($h in "qcnn", "classical") { foreach ($s in 0, 1, 2) {
   with `caffeinate -i`. `04_finetune.py` uses 4 CPU threads (`torch.set_num_threads(4)`).
 - **Different results:** a retrain on different hardware gives results within about a point of the
   reported ones. Don't mix runs from different machines in one table.
+
+## Cross-validation (follow-up experiment)
+
+This tests whether longer training helps and gives a more reliable QCNN vs classical comparison than
+one split. It uses only the 2,550 train + validation images, in 5 stratified folds
+(`common.cv_folds`, seed 42); the 450 test images are never loaded. Each fold trains on 2,040 images
+and holds out 510. Both heads are trained the same way at 30 epochs and at the original 12.
+
+```powershell
+$env:PYTHONWARNINGS = "ignore"
+foreach ($f in 0..4) { foreach ($e in 30, 12) { foreach ($h in "qcnn", "classical") {
+    .\.venv\Scripts\python.exe -u 04_finetune.py --head $h --fold $f --epochs $e
+} } }
+.\.venv\Scripts\python.exe 07_cv_report.py
+```
+
+- **Main number:** the final-epoch model, scored on its held-out fold, with and without TTA. The epoch
+  count is fixed in advance, so this estimate is unbiased. The best-epoch model is also reported,
+  but it was chosen on the same fold, so its accuracy is optimistic.
+- **Comparisons:** the held-out predictions of the 5 folds cover all 2,550 images once, so they are
+  pooled for exact McNemar tests (QCNN vs classical, and 30 vs 12 epochs), next to fold-by-fold
+  differences.
+- **Outputs (`results/cv/`):** `<head>_e<epochs>_fold<k>_seed0/` (`cv_result.json`, `history.csv`,
+  `oof.npz`), `cv_summary.csv`, `cv_stats.json`, `folds.csv`, and `results/figures/cv_curves.png`.
+  Finished runs are skipped, so the loop can be restarted.
+
+**Results** (GTX 1650, seed 0, final-epoch model, threshold 0.5; mean ± sample std over the 5
+folds of 510 images; the pooled accuracy over all 2,550 images is the same number):
+
+| Head | 12 epochs | 12 epochs + TTA | 30 epochs | 30 epochs + TTA |
+|---|---|---|---|---|
+| QCNN | 95.33 ± 1.07% | 95.80 ± 0.63% | 95.80 ± 1.21% | 96.16 ± 0.80% |
+| Classical | 95.29 ± 0.89% | 95.88 ± 1.03% | 95.33 ± 0.70% | 95.73 ± 1.26% |
+
+- **Training longer does not help significantly.** Held-out accuracy levels off at about 95.5% by
+  epoch 10, while training accuracy keeps rising to about 98% (`cv_curves.png`). 30 vs 12 epochs:
+  classical +0.04 ± 0.51 points (McNemar p = 1.0); QCNN +0.47 ± 0.75 points (p = 0.16).
+- **QCNN vs classical: still no significant difference.** At 12 epochs they are equal (+0.04 points,
+  p = 1.0). At 30 epochs the QCNN is ahead by 0.47 ± 0.73 points (right on 27 images where the
+  classical head is wrong, the reverse on 15; p = 0.09). That is not significant, it is one of 8
+  comparisons, and it rests on one seed per fold, so it is at most a hint worth re-checking with
+  more seeds.
+- **TTA** adds about 0.4–0.6 points to the final-epoch model in every setting.
+- **These numbers are not comparable with the test-set results above.** They come from different
+  images and from models trained on 2,040 instead of 2,100 images. The test set was not used, so
+  the reported test results stand unchanged.
 
 ## Outputs (`results/`)
 

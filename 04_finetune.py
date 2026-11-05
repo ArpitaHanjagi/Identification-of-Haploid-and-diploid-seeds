@@ -3,6 +3,7 @@
 Usage:
     python 04_finetune.py --head qcnn --seed 0
     python 04_finetune.py --head classical --seed 0
+    python 04_finetune.py --head qcnn --fold 2 --epochs 30     # cross-validation, see below
 
 Heads (both take the 512-d ResNet18 feature through the same 512 -> 8 linear layer):
     qcnn:      sigmoid * pi angles -> 8-qubit QCNN (24 params) -> <Z> -> 2 logits
@@ -10,6 +11,13 @@ Heads (both take the 512-d ResNet18 feature through the same 512 -> 8 linear lay
 
 The model is selected on validation accuracy; the test set is scored once, at the
 end. A checkpoint is written every epoch, so an interrupted run resumes.
+
+With --fold k, the run is one fold of 5-fold cross-validation over the 2,550
+train + validation images (common.cv_folds): fold k (510 images) is held out and the
+other 2,040 are used for training. The test set is not loaded or scored. Plain and
+TTA probabilities on the held-out fold are saved for the final-epoch model and for the
+best-by-validation model (oof.npz); 07_cv_report.py summarises them. Results go to
+results/cv/<head>_e<epochs>_fold<k>_seed<seed>/.
 
 The ResNet18 runs on the GPU when there is one (CUDA, or Apple MPS); the head always
 runs on the CPU. It is tiny, and the quantum simulator works in float64/complex128,
@@ -27,8 +35,9 @@ from torch import nn
 from torchvision import models
 from torchvision.transforms import v2
 
-from common import (QCNN_QUBITS, RESULTS_DIR, SPLITS_CSV, ExpvalToLogits,
-                    ToAngle01, keep_awake, qcnn_layer)
+from common import (CV_FOLDS, QCNN_QUBITS, RESULTS_DIR, SPLITS_CSV, ExpvalToLogits,
+                    ToAngle01, cv_folds, keep_awake, qcnn_layer)
+from tta import predict_probs
 
 IMG_SIZE = 224
 CACHE = RESULTS_DIR / "image_cache_224.pt"
@@ -116,6 +125,33 @@ def evaluate(model, images, labels, loss_fn):
     return loss_fn(logits, labels).item(), ((prob >= 0.5).long() == labels).float().mean().item(), prob.numpy()
 
 
+def finish_cv_run(args, model, device, run_dir, n_train, val_idx, x_val, y_val, history, best):
+    """Save held-out-fold probabilities for the final-epoch and the best-by-validation model.
+
+    The final-epoch model is the unbiased estimate: its epoch was fixed in advance. The
+    best-epoch model was chosen on this same fold, so its accuracy is optimistic.
+    """
+    torch.save(model.state_dict(), run_dir / "last_model.pt")
+    res = {"index": val_idx.numpy(), "y": y_val.numpy()}
+    for which in ["last", "best"]:
+        if which == "best":
+            model.load_state_dict(torch.load(run_dir / "best_model.pt", map_location="cpu"))
+        for key, use_tta in [("plain", False), ("tta", True)]:
+            res[f"{which}_{key}"] = predict_probs(model, x_val, normalize, use_tta)
+    np.savez(run_dir / "oof.npz", **res)
+    pd.DataFrame(history).to_csv(run_dir / "history.csv", index=False)
+    acc = {f"{k}_accuracy": float(((res[k] >= 0.5).astype(int) == res["y"]).mean())
+           for k in ["last_plain", "last_tta", "best_plain", "best_tta"]}
+    result = {"head": args.head, "epochs": args.epochs, "fold": args.fold, "folds": args.folds,
+              "seed": args.seed, "n_train": n_train,
+              "n_val": len(y_val), "best_epoch": best["epoch"], "final_train_acc": history[-1]["train_acc"],
+              "device": torch.cuda.get_device_name(device) if device.type == "cuda" else str(device), **acc}
+    (run_dir / "cv_result.json").write_text(json.dumps(result, indent=2))
+    (run_dir / "checkpoint.pt").unlink(missing_ok=True)  # 135 MB; cv_result.json marks the run as done
+    print("CV RESULT " + json.dumps({k: round(v, 4) if isinstance(v, float) else v for k, v in result.items()}),
+          flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--head", choices=["qcnn", "classical"], required=True)
@@ -124,7 +160,24 @@ def main():
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--smoke", action="store_true", help="tiny subset, to test the script end to end")
     ap.add_argument("--device", default="auto", help="auto (default), cuda, mps or cpu")
+    ap.add_argument("--fold", type=int, default=None,
+                    help="run cross-validation fold k (0-based) instead of the fixed split; never uses the test set")
+    ap.add_argument("--folds", type=int, default=CV_FOLDS, help="number of cross-validation folds")
     args = ap.parse_args()
+    cv = args.fold is not None
+    if cv and not 0 <= args.fold < args.folds:
+        raise SystemExit(f"--fold must be between 0 and {args.folds - 1}")
+
+    if cv:
+        run_dir = (RESULTS_DIR / ("cv_smoke" if args.smoke else "cv")
+                   / f"{args.head}_e{args.epochs}_fold{args.fold}_seed{args.seed}")
+        tag = f"{args.head} e{args.epochs} fold {args.fold} seed {args.seed}"
+    else:
+        run_dir = RESULTS_DIR / ("finetune_smoke" if args.smoke else "finetune") / f"{args.head}_seed{args.seed}"
+        tag = f"{args.head} seed {args.seed}"
+    if cv and (run_dir / "cv_result.json").exists():
+        print(f"skip {tag}: already finished ({run_dir / 'cv_result.json'})", flush=True)
+        return
 
     keep_awake()
     torch.set_num_threads(4)
@@ -133,17 +186,20 @@ def main():
         torch.backends.cudnn.benchmark = True
     print(f"device: {device}" + (f" ({torch.cuda.get_device_name(device)})" if device.type == "cuda" else ""),
           flush=True)
-    run_dir = RESULTS_DIR / ("finetune_smoke" if args.smoke else "finetune") / f"{args.head}_seed{args.seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     data = load_images()
     split = np.array(data["split"])
-    x = {s: data["images"][torch.from_numpy(split == s)] for s in ["train", "val", "test"]}
-    y = {s: data["labels"][torch.from_numpy(split == s)] for s in ["train", "val", "test"]}
+    if cv:
+        fold = cv_folds(data["labels"].numpy(), split, args.folds)
+        masks = {"train": (fold >= 0) & (fold != args.fold), "val": fold == args.fold}
+    else:
+        masks = {s: split == s for s in ["train", "val", "test"]}
+    idx = {s: torch.from_numpy(np.flatnonzero(m)) for s, m in masks.items()}  # rows of splits.csv
     if args.smoke:  # random 64 per split, so both classes are present
-        pick = {s: torch.randperm(len(v), generator=torch.Generator().manual_seed(1))[:64] for s, v in y.items()}
-        x = {s: v[pick[s]] for s, v in x.items()}
-        y = {s: v[pick[s]] for s, v in y.items()}
+        idx = {s: v[torch.randperm(len(v), generator=torch.Generator().manual_seed(1))[:64]] for s, v in idx.items()}
+    x = {s: data["images"][v] for s, v in idx.items()}
+    y = {s: data["labels"][v] for s, v in idx.items()}
 
     torch.manual_seed(args.seed)
     gen = torch.Generator().manual_seed(args.seed)
@@ -203,9 +259,13 @@ def main():
                     "gen": gen.get_state(), "rng": torch.get_rng_state(),
                     "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
                     "epoch": epoch, "epochs": args.epochs, "history": history, "best": best}, ckpt_path)
-        print(f"{args.head} seed {args.seed} epoch {epoch}/{args.epochs}: train acc {correct / seen:.4f}  "
+        print(f"{tag} epoch {epoch}/{args.epochs}: train acc {correct / seen:.4f}  "
               f"val acc {val_acc:.4f}  val loss {val_loss:.4f}{'  *best*' if improved else ''}  "
               f"({time.time() - t0:.0f}s)", flush=True)
+
+    if cv:
+        finish_cv_run(args, model, device, run_dir, len(y["train"]), idx["val"], x["val"], y["val"], history, best)
+        return
 
     # Final: best-by-validation model, scored once on the untouched test set.
     model.load_state_dict(torch.load(run_dir / "best_model.pt", map_location="cpu"))

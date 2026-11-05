@@ -12,6 +12,20 @@ measured 13 s per epoch for the classical head and 22 s for the QCNN at 2,100 tr
 - **QCNN vs classical:** no significant difference (exact McNemar p = 0.22 for the final models).
 - **No parameter advantage:** the QCNN head has 26 parameters and the classical head 18.
 
+## Done: 30 epochs and 5-fold cross-validation (November 2026)
+
+Both heads were trained at 30 and at 12 epochs on 5 folds of the 2,550 non-test images (the test set
+was not used). Details and the full table are in the README, section "Cross-validation".
+
+- **Training longer did not help significantly.** Held-out accuracy levels off at about 95.5% by
+  epoch 10; only training accuracy keeps rising. 30 vs 12 epochs: classical +0.04 points (p = 1.0),
+  QCNN +0.47 points (p = 0.16). The original "under-trained" reading was therefore wrong: held-out
+  accuracy is flat from about epoch 10, so a late best epoch did not mean it was still rising.
+- **QCNN vs classical: no significant difference.** Equal at 12 epochs; at 30 epochs the QCNN is
+  0.47 points ahead (p = 0.09, one seed per fold, one of 8 comparisons). Re-check with 3 seeds per
+  fold before reading anything into it.
+- **TTA** adds about 0.4–0.6 points everywhere.
+
 ## Ground rules for any new experiment
 
 1. **Treat both heads the same.** Any change (epochs, resolution, backbone, tuning budget) is applied
@@ -28,8 +42,9 @@ measured 13 s per epoch for the classical head and 22 s for the QCNN at 2,100 tr
 
 | Idea | Why | Extra GPU time (est.) |
 |---|---|---|
-| **Train longer (25–30 epochs instead of 12)** | The models look under-trained. The best epoch was 10–12 of 12 in 5 of the 6 runs, and the final training accuracy was only 96–97%. | about 1.5 h for 2 heads × 5 folds at 30 epochs |
-| **5-fold cross-validation** | More reliable estimates and comparisons than a single split; every image is used for validation once. Keep the 450 test images fixed and fold the remaining 2,550. | included above |
+| ~~Train longer (25–30 epochs instead of 12)~~ | **Done; no significant gain** (see above). | — |
+| ~~5-fold cross-validation~~ | **Done** (see above). The folds are in `results/cv/folds.csv` and can be reused. | — |
+| **3 seeds per fold at 30 epochs** | Checks whether the QCNN's 0.47-point lead at 30 epochs is real or seed noise. | about 3 h (2 more seeds × 2 heads × 5 folds) |
 | **Higher input resolution (320 or 384)** | The R1-nj marker is a small coloured area on the embryo, and detail may be lost at 224. | about 2× the time at 320. May need mixed precision to fit in 4 GB of GPU memory. |
 | **Stronger backbone (ResNet50, EfficientNet, ConvNeXt-Tiny)** | The backbone does almost all of the work, so it is the most likely way to raise accuracy. | about 2–4× the time. May need mixed precision or a smaller batch. |
 | **Equal-budget hyperparameter search** | Search learning rates and weight decay on validation with the same number of trials for each head. | depends on the budget |
@@ -61,9 +76,8 @@ at quantum machine learning venues.
 
 ## Suggested order
 
-1. **A: 30 epochs plus 5-fold CV for both heads** (about 1.5 h of GPU time).
-2. **B: the low-data experiment on the same folds** (about 1.5–2 h).
+1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the GTX 1650
+   for both 30 and 12 epochs).
+2. **B: the low-data experiment on the same folds** (about 1.5–2 h). Use 12 epochs, since 30 did not
+   help, unless the 3-seed check above shows otherwise.
 3. **B: noise robustness**, then real hardware if the simulated-noise result holds up.
-
-Together, steps 1 and 2 take about half a day: roughly 1 hour of code changes and 3–3.5 hours of
-unattended training.

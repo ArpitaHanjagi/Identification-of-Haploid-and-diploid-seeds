@@ -14,3 +14,4 @@ results/**/*.pt
 results/finetune_smoke/
 results/resnet50_features.npz
 results/feature_parts/
+results/cv_smoke/

@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import pennylane as qml
 import torch
 from torch import nn
@@ -22,12 +23,29 @@ FIGURES_DIR = PROJECT_DIR / "results" / "figures"
 # Haploid is the positive class (index 1), following Sabadin et al. (2021).
 CLASSES = ["diploid", "haploid"]
 SPLIT_SEED = 42
+CV_FOLDS = 5  # cross-validation folds over the 2,550 non-test images
 IMG_SIZE = 224
 N_AUGMENTED_VIEWS = 4  # extra augmented copies of each training image
 
 N_QUBITS = 4
 N_QLAYERS = 2
 FEATURE_DIM = 2048  # ResNet50 global-average-pooled output
+
+
+def cv_folds(labels, split, n_folds: int = CV_FOLDS) -> np.ndarray:
+    """Cross-validation fold (0 .. n_folds-1) of every image; -1 for the test images.
+
+    Only the train + validation images (2,550) are folded, stratified by class and
+    shuffled with SPLIT_SEED, so the 450 test images never enter cross-validation.
+    """
+    from sklearn.model_selection import StratifiedKFold
+    labels, split = np.asarray(labels), np.asarray(split)
+    fold = np.full(len(split), -1)
+    pool = np.flatnonzero(split != "test")
+    skf = StratifiedKFold(n_folds, shuffle=True, random_state=SPLIT_SEED)
+    for k, (_, held_out) in enumerate(skf.split(pool, labels[pool])):
+        fold[pool[held_out]] = k
+    return fold
 
 
 def keep_awake():
