@@ -104,7 +104,9 @@ at quantum machine learning venues.
 1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the GTX 1650
    for both 30 and 12 epochs).
 2. **A: the workstation plan above**, when the workstation is available. The code is ready and was
-   tested on the laptop (all backbones, bf16, parallel augmentation, the CUDA 13.0 build).
+   tested on the laptop (all backbones, parallel augmentation, the CUDA 13.0 build). bf16 mixed
+   precision could not be tested on real hardware (the GTX 1650 has no bf16 support); the first smoke
+   run on the workstation confirms it.
 3. **B: the low-data experiment on the same folds** (about 1.5–2 h on the laptop). Use 12 epochs,
    since 30 did not help, unless the 3-seed check above shows otherwise. It can run on the laptop
    in the meantime.
