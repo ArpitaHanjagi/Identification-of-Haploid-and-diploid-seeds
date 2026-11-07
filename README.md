@@ -31,6 +31,10 @@ Test accuracy averaged over 3 seeds (mean ± sample std):
 - **Comparison with Altuntaş et al.:** comparable. The bootstrap 95% interval for the QCNN's accuracy
   is 90.9–95.6%, which includes their 94.22%. Their test split is also different, so a sub-1-point
   difference either way should not be read as better or worse.
+- **Later studies on the same images** report 91–98% with other models and evaluation protocols,
+  four of them above both of our models (list in [FUTURE_SCOPE.md](FUTURE_SCOPE.md), section C). Their
+  protocols differ (cross-validation, 80:20 splits, one without a validation set), so the figures are
+  not directly comparable.
 - **Parameter count:** no advantage. The QCNN head has 26 trainable parameters (24 in the circuit, 2 in
   the readout), and the classical head has 18. Both sit on the same ResNet18 (11.2 M parameters)
   and the same 512 → 8 layer (4,104 parameters), which do almost all of the work.

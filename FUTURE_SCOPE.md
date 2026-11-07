@@ -90,19 +90,42 @@ the workstation's times come from step 1.
 A careful negative result ("no advantage under a fair comparison") is also publishable, particularly
 at quantum machine learning venues.
 
-## C. Literature and writing (planned)
+## C. Literature and writing (done, November 2026)
 
-- **Check later papers on the same dataset.** Several papers after Altuntaş et al. (2019) used these
-  3,000 images, for example work based on pre-trained CNNs, intuitionistic fuzzy sets and GLCM
-  features. Some may report more than 94.22%, so compare against the best published result, not only
-  Altuntaş et al.
-- **State the comparison caveats in the paper.** The test splits differ (450 images here, 900
-  implied by their reported numbers), and the labels are putative ploidy from the R1-nj marker.
+Later papers on the same 3,000 images (Altuntaş et al., 2019) report the following. Accuracy as reported
+by the authors; the evaluation protocols differ, so the figures are not directly comparable.
+
+| Study | Method | Evaluation | Accuracy (%) |
+|---|---|---|---|
+| Altuntaş, Cömert & Kocamaz (2019), *Comput. Electron. Agric.* 163 | VGG-19, transfer learning | single split (about 900 test images) | 94.22 |
+| Dönmez (2020), *Celal Bayar Univ. J. Sci.* 16(3) | ResNet50 features + SVM | 10-fold CV | 91.4 |
+| Dönmez (2022), *Data & Knowledge Eng.* 141 | features of six CNNs, selection and fusion, SVM | not checked | 96.74 † |
+| Setiawan & Pramudita (2023), ICONNSMAL 2022 | ResNet50, background removed | 80:20 train/test, no validation set | 98.16 |
+| Dönmez et al. (2023), *Multimedia Systems* 29(6) | hybrid transformer | not checked | 96.33 † |
+| Ayaz, Kutlu & Cömert (2024), *Agronomy Journal* 116(3) | DeepMaizeNet (CNN with attention) | 5-fold CV | 94.13 |
+| Dönmez, Diker, Elen & Ulu (2024), *Scientia Horticulturae* 337 | majority vote of five CNNs | not checked | 90.96 † |
+| Cömert et al. (2025), *Electronics* 14(13) | Slot-Maize (CNN, slot attention, GRU, LSTM) | 80:20 train/test † | 96.97 |
+| This project, test set | ResNet18 + QCNN / classical head | 70/15/15 split, 450 test images | 93.33 / 94.22 |
+| This project, cross-validation | ResNet18 + QCNN or classical head | 5-fold CV, 2,550 non-test images | 95.3 |
+
+† Not checked against the full text (publisher pages were not accessible): taken from an abstract
+excerpt or as cited by Cömert et al. (2025). Check these before submitting the paper.
+
+- **What it means:** Altuntaş et al. is not the best published result. Four later studies report more
+  than both of our test results (96–98%), but under different protocols; the highest (98.16%) has no
+  separate validation set, so its test images probably also guided model selection. The QCNN vs
+  classical conclusion is unaffected.
+- **Done in the research summary** (`Research_Summary_Haploid_Diploid_QCNN.docx` and `.pdf`, outside the
+  repository; the previous version is kept as `..._2026-10-19`): the later studies are cited in the
+  introduction and discussion with a new Table 7 and 7 references; the comparison is worded as
+  "comparable to the original VGG-19 baseline, below the 96–98% of several later studies"; the
+  limitations and conclusion include the cross-validation results; and the comparison caveats
+  (different splits, putative R1-nj labels) are stated.
 
 ## Plan (decided November 2026)
 
-Three steps remain: the literature and writing tasks (section C), the workstation training and the
-real-hardware test. Everything else above is not planned, including any further work on accuracy
+Two steps remain: the workstation training and the real-hardware test (section C, literature and
+writing, was done in November 2026). Everything else above is not planned, including any further work on accuracy
 beyond the workstation plan.
 
 1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the
@@ -111,8 +134,8 @@ beyond the workstation plan.
    tested on the laptop (all backbones, parallel augmentation, the CUDA 13.0 build). bf16 mixed
    precision could not be tested on real hardware (the GTX 1650 has no bf16 support); the first smoke
    run on the workstation confirms it.
-3. **C: literature and writing**, now; it needs no training. Find the later papers on this dataset
-   and compare with the best published result, and state the comparison caveats in the paper.
+3. ~~C: literature and writing~~ (done, November 2026; see section C). Three accuracy figures still
+   need checking against the full papers before submission.
 4. **B: real quantum hardware, the last step.** Inference only, with the final QCNN from step 2 (or
    the reported one): first under simulated noise of the chosen IBM device, then on the device itself
    if the simulated accuracy holds up. Compare with the noiseless simulator on the same test images.
