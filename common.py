@@ -2,7 +2,7 @@
 import ctypes
 import os
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import numpy as np
 import pennylane as qml
@@ -46,6 +46,71 @@ def cv_folds(labels, split, n_folds: int = CV_FOLDS) -> np.ndarray:
     for k, (_, held_out) in enumerate(skf.split(pool, labels[pool])):
         fold[pool[held_out]] = k
     return fold
+
+
+FOLDS_CSV = RESULTS_DIR / "cv" / "folds.csv"
+DEFAULT_VARIANT = "resnet18_224"  # backbone and image size of the reported results
+
+
+def variant_name(backbone: str, img_size: int, tag: str = "") -> str:
+    """e.g. resnet50_384, or resnet18_224_ws for runs made with --tag ws."""
+    return f"{backbone}_{img_size}" + (f"_{tag}" if tag else "")
+
+
+def parse_variant(variant: str):
+    """(backbone, img_size, tag) from a variant name such as efficientnet_v2_s_384_ws."""
+    import re
+    m = re.fullmatch(r"(?P<backbone>.+?)_(?P<size>\d+)(?:_(?P<tag>[A-Za-z0-9-]+))?", variant)
+    if not m:
+        raise ValueError(f"not a variant name: {variant} (expected <backbone>_<img size>[_<tag>])")
+    return m["backbone"], int(m["size"]), m["tag"] or ""
+
+
+def runs_root(kind: str, variant: str = DEFAULT_VARIANT, smoke: bool = False) -> Path:
+    """Folder that holds the runs of one backbone and image size.
+
+    kind is "finetune" (fixed split) or "cv". The original ResNet18 at 224 px keeps its
+    original place (results/finetune, results/cv); every other variant gets a subfolder,
+    for example results/cv/resnet50_384.
+    """
+    root = RESULTS_DIR / (f"{kind}_smoke" if smoke else kind)
+    return root if variant == DEFAULT_VARIANT else root / variant
+
+
+def report_dir(variant: str = DEFAULT_VARIANT) -> Path:
+    """Where 06_report.py writes a variant's final table, decisions and statistics: results/ for
+    ResNet18 at 224 px (the reported results), results/finetune/<variant>/ otherwise."""
+    return RESULTS_DIR if variant == DEFAULT_VARIANT else runs_root("finetune", variant)
+
+
+def file_key(path, cls) -> str:
+    """class/file name of an image, the same on every PC (splits.csv holds absolute paths)."""
+    return f"{cls}/{PureWindowsPath(path).name}"  # PureWindowsPath splits on both / and \
+
+
+def check_folds(splits, fold, save_if_missing: bool = True):
+    """Make sure the cross-validation folds are the ones in results/cv/folds.csv.
+
+    Comparisons between cross-validation runs, including runs made on different PCs, are
+    only valid on identical folds. If folds.csv does not exist yet, it is written.
+    """
+    import pandas as pd
+    keys = [file_key(p, c) for p, c in zip(splits["path"], splits["class"])]
+    mine = {k: int(f) for k, f in zip(keys, fold) if f >= 0}
+    if not FOLDS_CSV.exists():
+        if save_if_missing:
+            FOLDS_CSV.parent.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame({"index": np.flatnonzero(np.asarray(fold) >= 0), "file": [k.split("/")[1] for k in mine],
+                          "class": [k.split("/")[0] for k in mine], "fold": list(mine.values())}
+                         ).to_csv(FOLDS_CSV, index=False)
+        return
+    saved = pd.read_csv(FOLDS_CSV)
+    theirs = {f"{c}/{f}": int(k) for f, c, k in zip(saved["file"], saved["class"], saved["fold"])}
+    if mine != theirs:
+        differ = sum(mine.get(k) != v for k, v in theirs.items()) + len(mine.keys() - theirs.keys())
+        raise SystemExit(f"the cross-validation folds differ from {FOLDS_CSV} for {differ} images. Re-make the "
+                         f"split with 01_make_splits.py on the full dataset (test set: 184 haploid + 266 diploid) "
+                         f"and check HAPLOID_DATA_DIR.")
 
 
 def keep_awake():

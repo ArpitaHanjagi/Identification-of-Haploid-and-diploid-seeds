@@ -45,13 +45,38 @@ was not used). Details and the full table are in the README, section "Cross-vali
 | ~~Train longer (25–30 epochs instead of 12)~~ | **Done; no significant gain** (see above). | — |
 | ~~5-fold cross-validation~~ | **Done** (see above). The folds are in `results/cv/folds.csv` and can be reused. | — |
 | **3 seeds per fold at 30 epochs** | Checks whether the QCNN's 0.47-point lead at 30 epochs is real or seed noise. | about 3 h (2 more seeds × 2 heads × 5 folds) |
-| **Higher input resolution (320 or 384)** | The R1-nj marker is a small coloured area on the embryo, and detail may be lost at 224. | about 2× the time at 320. May need mixed precision to fit in 4 GB of GPU memory. |
-| **Stronger backbone (ResNet50, EfficientNet, ConvNeXt-Tiny)** | The backbone does almost all of the work, so it is the most likely way to raise accuracy. | about 2–4× the time. May need mixed precision or a smaller batch. |
+| **Higher input resolution (320–448)** | The R1-nj marker is a small coloured area on the embryo, and detail may be lost at 224. The photos' longest side has a median of 534 px (99.4% are at least 384), so up to about 448 adds real detail. | **Code ready** (`--img-size`); planned on the workstation, see below. |
+| **Stronger backbone (ResNet50, ConvNeXt-Tiny, EfficientNet)** | The backbone does almost all of the work, so it is the most likely way to raise accuracy. | **Code ready** (`--backbone`); planned on the workstation, see below. Too big for the laptop's 4 GB GPU at 384 px. |
 | **Equal-budget hyperparameter search** | Search learning rates and weight decay on validation with the same number of trials for each head. | depends on the budget |
 
 Even with these, beating Altuntaş et al. could only be claimed as "higher accuracy", not
 "significantly better", unless the gain is well above the roughly ±2-point interval. Their split is
 also different.
+
+### Workstation plan: stronger backbones and higher resolution
+
+For an HP workstation with an NVIDIA RTX Blackwell GPU. Setup and commands are in the README,
+section "Training on another PC or a workstation". These choices are fixed now, before any
+training, so that the final model is not tuned to the results:
+
+1. **Setup:** install `requirements-cu130.txt`; `check_setup.py --download` must end with
+   `Ready to train.`; measure seconds per epoch for each variant with a smoke run.
+2. **Baseline on the workstation:** ResNet18 at 224 px, 5 folds, 12 epochs, both heads, with
+   `--tag ws`. It shows how far the new hardware alone moves the results compared with the laptop.
+3. **Variants:** ResNet50 and ConvNeXt-Tiny, each at 224 and 384 px (4 variants), 5 folds, 12 epochs,
+   both heads. Optionally EfficientNetV2-S at 384 px.
+4. **Same settings for everything:** 12 epochs, batch size 32, backbone learning rate 3e-4, seed 0,
+   identical for both heads. Any change is applied to all variants and both heads.
+5. **Choosing the variant (cross-validation only):** the highest pooled final-epoch accuracy without
+   TTA, averaged over the two heads. If a cheaper variant is within 0.5 points, take the cheaper one.
+   One variant is chosen for both heads, so the QCNN vs classical comparison stays fair.
+6. **Final model:** train the chosen variant on the fixed split (seeds 0, 1, 2 per head), then
+   `05_evaluate.py --variant ...` and `06_report.py --variant ...`. TTA, seeds and threshold are chosen
+   on validation, as before. This is the test set's third use, so it happens once, at the very end.
+7. **Report all variants'** cross-validation results, not only the chosen one.
+
+Time: the GTX 1650 needs about 35 min for ResNet18 at 224 px (5 folds, both heads, 12 epochs);
+the workstation's times come from step 1.
 
 ## B. Experiments where the quantum head could show something new
 
@@ -78,6 +103,10 @@ at quantum machine learning venues.
 
 1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the GTX 1650
    for both 30 and 12 epochs).
-2. **B: the low-data experiment on the same folds** (about 1.5–2 h). Use 12 epochs, since 30 did not
-   help, unless the 3-seed check above shows otherwise.
-3. **B: noise robustness**, then real hardware if the simulated-noise result holds up.
+2. **A: the workstation plan above**, when the workstation is available. The code is ready and was
+   tested on the laptop (all backbones, bf16, parallel augmentation, the CUDA 13.0 build).
+3. **B: the low-data experiment on the same folds** (about 1.5–2 h on the laptop). Use 12 epochs,
+   since 30 did not help, unless the 3-seed check above shows otherwise. It can run on the laptop
+   in the meantime.
+4. **B: noise robustness**, then real hardware if the simulated-noise result holds up. Use the final
+   model from step 2, if there is one.

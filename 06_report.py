@@ -7,8 +7,13 @@ test set exactly once.
 Statistical checks (`statistics`, saved to final_stats.json) use the test set at
 threshold 0.5: test accuracy averaged over seeds, a bootstrap 95% interval for each
 final model, and exact McNemar tests on paired QCNN vs classical predictions.
+
+    python 06_report.py                          # ResNet18 at 224 px: writes to results/
+    python 06_report.py --variant resnet50_384   # writes to results/finetune/resnet50_384/
 """
+import argparse
 import json
+import sys
 
 import matplotlib
 import numpy as np
@@ -16,13 +21,25 @@ import pandas as pd
 from scipy.stats import binomtest
 from sklearn.metrics import confusion_matrix, matthews_corrcoef, roc_auc_score, roc_curve
 
-from common import FIGURES_DIR, RESULTS_DIR
+from common import DEFAULT_VARIANT, FIGURES_DIR, parse_variant, report_dir, runs_root
 from tta import choose_threshold
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-HEADS = {"qcnn": "ResNet18 + QCNN (8 qubits)", "classical": "ResNet18 + classical head"}
+BACKBONE_NAMES = {"resnet18": "ResNet18", "resnet50": "ResNet50", "convnext_tiny": "ConvNeXt-Tiny",
+                  "efficientnet_b0": "EfficientNet-B0", "efficientnet_v2_s": "EfficientNetV2-S"}
+
+
+def head_labels(variant=DEFAULT_VARIANT):
+    """Model names for tables and figures; ResNet18 at 224 px keeps its original names."""
+    backbone, size, tag = parse_variant(variant)
+    base = BACKBONE_NAMES.get(backbone, backbone) + (
+        "" if variant == DEFAULT_VARIANT else f" ({size} px" + (f", {tag}" if tag else "") + ")")
+    return {"qcnn": f"{base} + QCNN (8 qubits)", "classical": f"{base} + classical head"}
+
+
+HEADS = head_labels()
 ALTUNTAS = {"model": "Altuntaş et al. 2019 (VGG-19, reported)", "accuracy": 0.9422, "sensitivity": 0.9458,
             "specificity": 0.9397, "f1": 0.9307}
 
@@ -124,9 +141,9 @@ def print_statistics(stats):
                   f"p = {m['p_value']:.3f}")
 
 
-def load_runs(head):
+def load_runs(head, root=None):
     runs = {}
-    for f in sorted((RESULTS_DIR / "finetune").glob(f"{head}_seed*/probs.npz")):
+    for f in sorted((root or runs_root("finetune")).glob(f"{head}_seed*/probs.npz")):
         seed = int(f.parent.name.split("_seed")[1])
         d = np.load(f)
         runs[seed] = {k: d[k] for k in d.files}
@@ -134,10 +151,18 @@ def load_runs(head):
 
 
 def main():
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    sys.stdout.reconfigure(encoding="utf-8")  # names such as Altuntaş, also when output is redirected
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--variant", default=DEFAULT_VARIANT, help="<backbone>_<img size>, e.g. resnet50_384")
+    args = ap.parse_args()
+    root, out_dir = runs_root("finetune", args.variant), report_dir(args.variant)
+    fig_dir = FIGURES_DIR if args.variant == DEFAULT_VARIANT else out_dir / "figures"
+    labels = head_labels(args.variant)
+
+    fig_dir.mkdir(parents=True, exist_ok=True)
     rows, decisions, finals, all_runs = [], {}, {}, {}
-    for head, label in HEADS.items():
-        runs = load_runs(head)
+    for head, label in labels.items():
+        runs = load_runs(head, root)
         if not runs:
             print(f"no finished runs for {head}")
             continue
@@ -162,19 +187,19 @@ def main():
     rows.append(ALTUNTAS)
 
     table = pd.DataFrame(rows)
-    table.to_csv(RESULTS_DIR / "final_table.csv", index=False, encoding="utf-8-sig")
-    (RESULTS_DIR / "final_decisions.json").write_text(json.dumps(decisions, indent=2))
+    table.to_csv(out_dir / "final_table.csv", index=False, encoding="utf-8-sig")
+    (out_dir / "final_decisions.json").write_text(json.dumps(decisions, indent=2))
     with pd.option_context("display.width", 200, "display.max_colwidth", 80):
         print(table[["model", "val_accuracy", "accuracy", "sensitivity", "specificity", "f1", "auc", "mcc"]]
               .round(4).to_string(index=False))
     print(json.dumps(decisions, indent=2))
     if all_runs:
         stats = statistics(all_runs, finals)
-        (RESULTS_DIR / "final_stats.json").write_text(json.dumps(stats, indent=2))
+        (out_dir / "final_stats.json").write_text(json.dumps(stats, indent=2))
         print_statistics(stats)
 
     if "qcnn" in finals:
-        y_test = load_runs("qcnn")[decisions["qcnn"]["seeds"][0]]["y_test"]
+        y_test = all_runs["qcnn"][decisions["qcnn"]["seeds"][0]]["y_test"]
         t = 0.5
         cm = confusion_matrix(y_test, (finals["qcnn"] >= t).astype(int), labels=[1, 0])
         fig, ax = plt.subplots(figsize=(3.8, 3.4))
@@ -183,25 +208,25 @@ def main():
             ax.text(j, i, v, ha="center", va="center", fontsize=13, color="white" if v > cm.max() / 2 else "black")
         ax.set_xticks([0, 1], ["Haploid", "Diploid"])
         ax.set_yticks([0, 1], ["Haploid", "Diploid"])
-        ax.set(xlabel="Predicted", ylabel="Actual", title="ResNet18 + QCNN, test set")
+        ax.set(xlabel="Predicted", ylabel="Actual", title=labels["qcnn"].replace(" (8 qubits)", "") + ", test set")
         fig.tight_layout()
-        fig.savefig(FIGURES_DIR / "final_confusion_qcnn.png", dpi=200)
+        fig.savefig(fig_dir / "final_confusion_qcnn.png", dpi=200)
         plt.close(fig)
 
         fig, ax = plt.subplots(figsize=(4.8, 4.4))
         for head, p in finals.items():
             fpr, tpr, _ = roc_curve(y_test, p)
-            ax.plot(fpr, tpr, label=f"{HEADS[head]} (AUC {roc_auc_score(y_test, p):.4f})")
+            ax.plot(fpr, tpr, label=f"{labels[head]} (AUC {roc_auc_score(y_test, p):.4f})")
         ax.plot([0, 1], [0, 1], "k--", lw=0.8)
         ax.set(xlabel="False positive rate", ylabel="True positive rate (haploid)", title="ROC, test set")
         ax.legend(fontsize=7, loc="lower right")
         fig.tight_layout()
-        fig.savefig(FIGURES_DIR / "final_roc.png", dpi=200)
+        fig.savefig(fig_dir / "final_roc.png", dpi=200)
         plt.close(fig)
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.6))
-    for head in HEADS:
-        f = RESULTS_DIR / "finetune" / f"{head}_seed0" / "history.csv"
+    for head in labels:
+        f = root / f"{head}_seed0" / "history.csv"
         if f.exists():
             h = pd.read_csv(f)
             axes[0].plot(h.epoch, h.train_acc, label=f"{head} train")
@@ -213,7 +238,7 @@ def main():
     axes[1].set(xlabel="Epoch", ylabel="Loss", title="Fine-tuning loss (seed 0)")
     axes[0].legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(FIGURES_DIR / "final_training_curves.png", dpi=200)
+    fig.savefig(fig_dir / "final_training_curves.png", dpi=200)
     plt.close(fig)
 
 

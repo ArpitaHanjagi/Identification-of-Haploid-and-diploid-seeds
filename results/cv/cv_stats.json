@@ -2,7 +2,7 @@
   "n_folds": 5,
   "threshold": 0.5,
   "configs": {
-    "classical, 12 epochs": {
+    "resnet18_224, classical, 12 epochs": {
       "folds_done": [
         0,
         1,
@@ -11,6 +11,9 @@
         4
       ],
       "complete": true,
+      "devices": [
+        "NVIDIA GeForce GTX 1650"
+      ],
       "best_epoch": [
         9,
         11,
@@ -142,7 +145,7 @@
         ]
       }
     },
-    "classical, 30 epochs": {
+    "resnet18_224, classical, 30 epochs": {
       "folds_done": [
         0,
         1,
@@ -151,6 +154,9 @@
         4
       ],
       "complete": true,
+      "devices": [
+        "NVIDIA GeForce GTX 1650"
+      ],
       "best_epoch": [
         29,
         23,
@@ -282,7 +288,7 @@
         ]
       }
     },
-    "qcnn, 12 epochs": {
+    "resnet18_224, qcnn, 12 epochs": {
       "folds_done": [
         0,
         1,
@@ -291,6 +297,9 @@
         4
       ],
       "complete": true,
+      "devices": [
+        "NVIDIA GeForce GTX 1650"
+      ],
       "best_epoch": [
         4,
         12,
@@ -422,7 +431,7 @@
         ]
       }
     },
-    "qcnn, 30 epochs": {
+    "resnet18_224, qcnn, 30 epochs": {
       "folds_done": [
         0,
         1,
@@ -431,6 +440,9 @@
         4
       ],
       "complete": true,
+      "devices": [
+        "NVIDIA GeForce GTX 1650"
+      ],
       "best_epoch": [
         22,
         30,
@@ -565,65 +577,73 @@
   },
   "mcnemar": [
     {
-      "a": "classical, 30 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, classical, 30 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch",
+      "same_gpu": true,
       "only_a_right": 35,
       "only_b_right": 34,
       "p_value": 1.0
     },
     {
-      "a": "classical, 30 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, classical, 30 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch + TTA",
+      "same_gpu": true,
       "only_a_right": 21,
       "only_b_right": 25,
       "p_value": 0.6587380770236564
     },
     {
-      "a": "qcnn, 12 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, qcnn, 12 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch",
+      "same_gpu": true,
       "only_a_right": 26,
       "only_b_right": 25,
       "p_value": 1.0
     },
     {
-      "a": "qcnn, 12 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, qcnn, 12 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch + TTA",
+      "same_gpu": true,
       "only_a_right": 16,
       "only_b_right": 18,
       "p_value": 0.8641662404406816
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "classical, 30 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, classical, 30 epochs",
       "variant": "final epoch",
+      "same_gpu": true,
       "only_a_right": 27,
       "only_b_right": 15,
       "p_value": 0.08842954698775429
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "classical, 30 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, classical, 30 epochs",
       "variant": "final epoch + TTA",
+      "same_gpu": true,
       "only_a_right": 23,
       "only_b_right": 12,
       "p_value": 0.08953107893466952
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "qcnn, 12 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, qcnn, 12 epochs",
       "variant": "final epoch",
+      "same_gpu": true,
       "only_a_right": 37,
       "only_b_right": 25,
       "p_value": 0.16188140552559763
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "qcnn, 12 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, qcnn, 12 epochs",
       "variant": "final epoch + TTA",
+      "same_gpu": true,
       "only_a_right": 26,
       "only_b_right": 17,
       "p_value": 0.2220528201560228
@@ -631,8 +651,8 @@
   ],
   "fold_paired": [
     {
-      "a": "classical, 30 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, classical, 30 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch",
       "mean_diff": 0.00039215686274511884,
       "std_diff": 0.005075364355115625,
@@ -645,8 +665,8 @@
       ]
     },
     {
-      "a": "classical, 30 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, classical, 30 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch + TTA",
       "mean_diff": -0.0015686274509803867,
       "std_diff": 0.006106828040155836,
@@ -659,8 +679,8 @@
       ]
     },
     {
-      "a": "qcnn, 12 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, qcnn, 12 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch",
       "mean_diff": 0.00039215686274511884,
       "std_diff": 0.005783482825001054,
@@ -673,8 +693,8 @@
       ]
     },
     {
-      "a": "qcnn, 12 epochs",
-      "b": "classical, 12 epochs",
+      "a": "resnet18_224, qcnn, 12 epochs",
+      "b": "resnet18_224, classical, 12 epochs",
       "variant": "final epoch + TTA",
       "mean_diff": -0.0007843137254901933,
       "std_diff": 0.005476172566183898,
@@ -687,8 +707,8 @@
       ]
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "classical, 30 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, classical, 30 epochs",
       "variant": "final epoch",
       "mean_diff": 0.004705882352941204,
       "std_diff": 0.007283990439610465,
@@ -701,8 +721,8 @@
       ]
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "classical, 30 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, classical, 30 epochs",
       "variant": "final epoch + TTA",
       "mean_diff": 0.004313725490196085,
       "std_diff": 0.00594735328945221,
@@ -715,8 +735,8 @@
       ]
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "qcnn, 12 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, qcnn, 12 epochs",
       "variant": "final epoch",
       "mean_diff": 0.004705882352941204,
       "std_diff": 0.007543287867322121,
@@ -729,8 +749,8 @@
       ]
     },
     {
-      "a": "qcnn, 30 epochs",
-      "b": "qcnn, 12 epochs",
+      "a": "resnet18_224, qcnn, 30 epochs",
+      "b": "resnet18_224, qcnn, 12 epochs",
       "variant": "final epoch + TTA",
       "mean_diff": 0.003529411764705892,
       "std_diff": 0.00561483178952015,

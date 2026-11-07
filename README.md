@@ -114,8 +114,9 @@ To classify photos with the trained models (each head's final configuration, wit
   for the classical head, 22 s for the QCNN).
 - **Interruptions:** each run saves a checkpoint every epoch and resumes if interrupted.
 - **Devices:** `04_finetune.py` picks CUDA, Apple MPS or CPU automatically (`--device` overrides it).
-  The ResNet18 runs on the GPU. The head always runs on the CPU, because the quantum simulator works
-  in float64/complex128.
+  The backbone runs on the GPU. The head always runs on the CPU, because the quantum simulator works
+  in float64/complex128. Other GPUs and the workstation: see
+  [Training on another PC or a workstation](#training-on-another-pc-or-a-workstation).
 - **Windows Smart App Control:** if it is on, it blocks PyTorch's DLLs (`WinError 4551 ... c10.dll`).
   Turn it off, or run the project inside WSL2.
 - **No local GPU:** [kaggle_train.ipynb](kaggle_train.ipynb) runs the whole pipeline on a free Kaggle
@@ -154,53 +155,127 @@ No GPU is needed: `predict.py --device cpu` classifies 10 photos (with TTA) in a
    .\.venv\Scripts\python.exe -m pip install pennylane==0.45.1 scikit-learn==1.9.1 scipy==1.18.1 pandas==3.0.6 numpy==2.5.2 matplotlib==3.11.2 pillow==12.3.0
    ```
 
-4. **ResNet18's ImageNet weights** (45 MB) download automatically the first time, which needs
-   internet once. For an offline PC, copy `%USERPROFILE%\.cache\torch\hub\checkpoints\resnet18-f37072fd.pth`
-   to the same place on the new PC.
+4. **No ImageNet download is needed** to classify photos: `predict.py` builds the model from the
+   trained weights alone. (Training does need the ImageNet weights; see `check_setup.py --download`.)
 5. **The dataset** is only needed for `--from-test` and for retraining. Copy it, then point the code
    at it: `$env:HAPLOID_DATA_DIR = "D:\path\to\haploid_and_diploid_maize_seeds_dataset"`.
    `results/splits.csv` stores the original PC's paths; `predict.py` finds each file by name under
    that folder instead.
 6. **Run it:** `.\.venv\Scripts\python.exe predict.py --from-test 10` or `predict.py photo.jpg`.
 
-## Training on another PC (with or without a GPU)
+## Training on another PC or a workstation
 
-Set up the code and Python packages as in steps 1 and 3 above (the dataset is required). The code picks
-CUDA, Apple MPS or the CPU automatically. On a Mac, `pip install torch torchvision` plus the pinned
-packages above is enough.
+The main target is a workstation with an NVIDIA RTX Blackwell GPU, but the same steps work on any
+PC with an NVIDIA GPU, on an Apple Silicon Mac, and (slowly) on a CPU. The code picks the device
+and its speed settings itself.
 
-A copied or cloned folder already contains the reported run's results, so two things need doing
-first:
+**1. Code and Python 3.12 packages.** Get the code as in step 1 above, then install the packages
+that fit the GPU:
 
-- **Rename the old results.** Otherwise `05_evaluate.py` skips every run whose `probs.npz` already
-  exists, and the report would show the old numbers.
-- **Re-make the split.** `results/splits.csv` holds the original PC's paths, so run
-  `01_make_splits.py` again. It sorts the same file names with the same seed and gives the same
-  split. Check that the test set is 184 haploid + 266 diploid.
+| GPU | Install |
+|---|---|
+| NVIDIA RTX Blackwell (RTX PRO 6000/5000/4000 Blackwell, RTX 50 series) | `requirements-cu130.txt` (CUDA 13.0 build; NVIDIA driver 580 or newer) |
+| Other NVIDIA GPUs from the GTX 16 / RTX 20 series on | either file; `requirements-cu130.txt` needs driver 580 or newer, `requirements.txt` works with older drivers |
+| NVIDIA GTX 10 series, Titan V and older (Pascal, Volta) | `requirements.txt` (CUDA 12.6 build; the CUDA 13.0 build has no code for them) |
+| Apple Silicon Mac | `pip install torch==2.14.1 torchvision==0.29.1`, then the other packages as in step 3 above |
+| No GPU | the CPU build, as in step 3 above |
 
 ```powershell
-Rename-Item results results_gtx1650                    # keep the reported run as a backup
-$env:HAPLOID_DATA_DIR = "D:\path\to\haploid_and_diploid_maize_seeds_dataset"
-$env:PYTHONWARNINGS = "ignore"
-.\.venv\Scripts\python.exe 01_make_splits.py
-.\.venv\Scripts\python.exe 04_finetune.py --head qcnn --seed 0 --epochs 1 --smoke   # prints the device used
-
-foreach ($h in "qcnn", "classical") { foreach ($s in 0, 1, 2) {
-    .\.venv\Scripts\python.exe -u 04_finetune.py --head $h --seed $s --epochs 12
-} }
-.\.venv\Scripts\python.exe 05_evaluate.py
-.\.venv\Scripts\python.exe 06_report.py
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-cu130.txt     # Blackwell workstation
 ```
 
-| Hardware | Training, 6 runs | Evaluation + report |
-|---|---|---|
-| NVIDIA GTX 1650 (measured) | about 25 min | a few minutes |
-| 4-core laptop CPU, no GPU (estimated from measured batch times) | about 4 hours (about 35–40 min per run) | about 20 min |
+The CUDA 12.6 build in `requirements.txt` has no code for Blackwell GPUs, so it cannot use them.
+On Linux, use `python3.12 -m venv .venv` and `.venv/bin/python` instead.
 
-- **No GPU:** keep the PC plugged in. Windows is kept awake automatically; on a Mac, prefix commands
-  with `caffeinate -i`. `04_finetune.py` uses 4 CPU threads (`torch.set_num_threads(4)`).
+**2. Dataset and split.** Copy the dataset, point the code at it and re-make the split, because
+`results/splits.csv` holds this laptop's paths. The split comes out the same (same file names,
+same seed). Don't commit the re-made `splits.csv`; only its paths differ.
+
+```powershell
+$env:HAPLOID_DATA_DIR = "D:\path\to\haploid_and_diploid_maize_seeds_dataset"
+.\.venv\Scripts\python.exe 01_make_splits.py
+```
+
+**3. Check the setup.** [check_setup.py](check_setup.py) checks the GPU and PyTorch build, the
+dataset, the split (test set 184 haploid + 266 diploid), the cross-validation folds against
+`results/cv/folds.csv`, and the QCNN simulator. `--download` also fetches the ImageNet weights of
+every backbone (about 350 MB; an offline PC can copy `%USERPROFILE%\.cache\torch\hub\checkpoints`
+from another PC instead). It must end with `Ready to train.`
+
+```powershell
+.\.venv\Scripts\python.exe check_setup.py --download
+```
+
+**4. Measure the speed** of each backbone and image size you plan to use, before the long runs.
+A smoke run with 1,024 images per split prints the seconds per epoch and the GPU memory used. Smoke
+runs write only to `results/cv_smoke/` and `results/finetune_smoke/`:
+
+```powershell
+$env:PYTHONWARNINGS = "ignore"
+.\.venv\Scripts\python.exe -u 04_finetune.py --head qcnn --fold 0 --epochs 2 --smoke --smoke-images 1024 --backbone resnet50 --img-size 384
+```
+
+**5. Train.** Cross-validation for one backbone and image size, both heads; then the report:
+
+```powershell
+foreach ($f in 0..4) { foreach ($h in "qcnn", "classical") {
+    .\.venv\Scripts\python.exe -u 04_finetune.py --head $h --fold $f --epochs 12 --backbone resnet50 --img-size 384
+} }
+.\.venv\Scripts\python.exe 07_cv_report.py
+```
+
+Runs of another backbone or size go to their own folder (`results/cv/resnet50_384/`), so they never
+mix with the ResNet18 results. To repeat runs that already exist from another PC, such as the
+ResNet18 baseline, add a tag: `--tag ws` writes to `results/cv/resnet18_224_ws/`. The report then
+compares the two and marks the comparison `[different GPUs]`.
+
+**Options of [04_finetune.py](04_finetune.py)**
+
+| Option | Default | What it does |
+|---|---|---|
+| `--backbone` | `resnet18` | `resnet18`, `resnet50`, `convnext_tiny`, `efficientnet_b0` or `efficientnet_v2_s` (ImageNet-pretrained) |
+| `--img-size` | `224` | input size in pixels. The photos' longest side is 300–718 px (median 534), so 320–448 adds real detail; above about 448, most photos are only upscaled |
+| `--epochs`, `--batch-size`, `--lr-backbone` | `12`, `32`, `3e-4` | training settings; change them for both heads alike |
+| `--fold`, `--seed`, `--tag` | none, `0`, none | cross-validation fold; random seed; label for the results folder |
+| `--amp` | `auto` | bf16 mixed precision for the backbone: on for NVIDIA RTX 30 series and newer (including Blackwell), off on older GPUs, Apple and CPU |
+| `--workers` | `auto` | processes that augment training images in parallel: as many as `--threads` on a GPU PC, none on a CPU |
+| `--threads` | `auto` | CPU threads of the main process, which also runs the QCNN simulator: half the logical CPUs, at most 8 |
+| `--device` | `auto` | `cuda`, `mps` or `cpu` |
+
+`--amp`, `--workers` and `--threads` change only the speed. Each run records what it used in
+`run_config.json`. A run resumes from its checkpoint only with the same training settings.
+
+**Time**
+
+| Hardware | ResNet18, 224 px: 6 fixed-split runs | ResNet18, 224 px: 5-fold CV, both heads, 12 epochs |
+|---|---|---|
+| NVIDIA GTX 1650 laptop (measured) | about 25 min | about 35 min |
+| RTX Blackwell workstation | measure with step 4 | measure with step 4 |
+| 4-core laptop CPU, no GPU (estimated) | about 4 hours | about 6 hours |
+
+On the GTX 1650, half precision is not usable (fp16 gave NaN at batch size 64, and ran 4× slower),
+and the 4 GB of memory limits bigger backbones and images to batch size 16 at most.
+
+- **Keep the PC plugged in.** Windows is kept awake automatically; on a Mac, prefix commands with
+  `caffeinate -i`. Interrupted runs resume from their last epoch.
 - **Different results:** a retrain on different hardware gives results within about a point of the
-  reported ones. Don't mix runs from different machines in one table.
+  original ones. Compare only runs from the same PC, or tag them and compare them as separate variants.
+- **Windows Smart App Control** blocks PyTorch's DLLs (`WinError 4551`); turn it off, or use WSL2.
+
+**Final model of a new variant.** Once cross-validation has picked the backbone and size, train it on
+the fixed split (3 seeds per head), then evaluate and report it. Its tables and figures go to
+`results/finetune/<variant>/`, so the reported results in `results/` are not touched. This scores
+the test set, so do it once, at the end:
+
+```powershell
+foreach ($h in "qcnn", "classical") { foreach ($s in 0, 1, 2) {
+    .\.venv\Scripts\python.exe -u 04_finetune.py --head $h --seed $s --epochs 12 --backbone resnet50 --img-size 384
+} }
+.\.venv\Scripts\python.exe 05_evaluate.py --variant resnet50_384
+.\.venv\Scripts\python.exe 06_report.py --variant resnet50_384
+.\.venv\Scripts\python.exe predict.py --variant resnet50_384 --from-test 10
+```
 
 ## Cross-validation (follow-up experiment)
 
@@ -221,11 +296,14 @@ foreach ($f in 0..4) { foreach ($e in 30, 12) { foreach ($h in "qcnn", "classica
   count is fixed in advance, so this estimate is unbiased. The best-epoch model is also reported,
   but it was chosen on the same fold, so its accuracy is optimistic.
 - **Comparisons:** the held-out predictions of the 5 folds cover all 2,550 images once, so they are
-  pooled for exact McNemar tests (QCNN vs classical, and 30 vs 12 epochs), next to fold-by-fold
-  differences.
+  pooled for exact McNemar tests (QCNN vs classical, 30 vs 12 epochs, and one backbone or image size
+  vs another for the same head), next to fold-by-fold differences.
 - **Outputs (`results/cv/`):** `<head>_e<epochs>_fold<k>_seed0/` (`cv_result.json`, `history.csv`,
-  `oof.npz`), `cv_summary.csv`, `cv_stats.json`, `folds.csv`, and `results/figures/cv_curves.png`.
-  Finished runs are skipped, so the loop can be restarted.
+  `oof.npz`, `run_config.json`), `cv_summary.csv`, `cv_stats.json`, `folds.csv`, and
+  `results/figures/cv_curves.png`. Other backbones and image sizes are in subfolders such as
+  `results/cv/resnet50_384/`. Finished runs are skipped, so the loop can be restarted.
+- **Same folds everywhere:** `04_finetune.py` and `07_cv_report.py` check the folds against
+  `results/cv/folds.csv` and stop if they differ, so runs from different PCs stay comparable.
 
 **Results** (GTX 1650, seed 0, final-epoch model, threshold 0.5; mean ± sample std over the 5
 folds of 510 images; the pooled accuracy over all 2,550 images is the same number):
@@ -254,8 +332,13 @@ folds of 510 images; the pooled accuracy over all 2,550 images is the same numbe
 - `final_decisions.json`: the choices made on validation for each head.
 - `final_stats.json`: seed averages, bootstrap intervals and McNemar tests.
 - `figures/final_confusion_qcnn.png`, `final_roc.png`, `final_training_curves.png`.
-- `finetune/<head>_seed<n>/`: `best_model.pt` (weights), `history.csv`, `test_result.json`, `probs.npz`.
+- `finetune/<head>_seed<n>/`: `best_model.pt` (weights), `history.csv`, `test_result.json`, `probs.npz`,
+  and for runs made after November 2026 `run_config.json` (backbone, image size, settings, GPU).
+- `finetune/<variant>/`: the same for another backbone or image size, plus its own `final_*` files
+  and `figures/` from `06_report.py --variant <variant>`.
+- `cv/`: cross-validation runs and summary (see above).
 - `splits.csv`: which image is in the train, validation or test set.
+- `image_cache_<size>.pt`: the resized images, rebuilt automatically if the split changes.
 
 ## Earlier experiment: frozen ResNet50 features
 
