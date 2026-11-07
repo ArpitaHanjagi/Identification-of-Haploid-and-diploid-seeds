@@ -44,10 +44,10 @@ was not used). Details and the full table are in the README, section "Cross-vali
 |---|---|---|
 | ~~Train longer (25–30 epochs instead of 12)~~ | **Done; no significant gain** (see above). | — |
 | ~~5-fold cross-validation~~ | **Done** (see above). The folds are in `results/cv/folds.csv` and can be reused. | — |
-| **3 seeds per fold at 30 epochs** | Checks whether the QCNN's 0.47-point lead at 30 epochs is real or seed noise. | about 3 h (2 more seeds × 2 heads × 5 folds) |
+| ~~3 seeds per fold at 30 epochs~~ | Would check whether the QCNN's 0.47-point lead at 30 epochs is real or seed noise. | **Not planned** (decided November 2026). |
 | **Higher input resolution (320–448)** | The R1-nj marker is a small coloured area on the embryo, and detail may be lost at 224. The photos' longest side has a median of 534 px (99.4% are at least 384), so up to about 448 adds real detail. | **Code ready** (`--img-size`); planned on the workstation, see below. |
 | **Stronger backbone (ResNet50, ConvNeXt-Tiny, EfficientNet)** | The backbone does almost all of the work, so it is the most likely way to raise accuracy. | **Code ready** (`--backbone`); planned on the workstation, see below. Too big for the laptop's 4 GB GPU at 384 px. |
-| **Equal-budget hyperparameter search** | Search learning rates and weight decay on validation with the same number of trials for each head. | depends on the budget |
+| ~~Equal-budget hyperparameter search~~ | Search learning rates and weight decay on validation with the same number of trials for each head. | **Not planned** (decided November 2026). |
 
 Even with these, beating Altuntaş et al. could only be claimed as "higher accuracy", not
 "significantly better", unless the gain is well above the roughly ±2-point interval. Their split is
@@ -82,15 +82,15 @@ the workstation's times come from step 1.
 
 | Idea | What it tests | Extra GPU time (est.) |
 |---|---|---|
-| **Low-data regime:** train on 10%, 25% and 50% of the training images, with 5 repeats each, for both heads | Whether the QCNN degrades more gracefully than the classical head with few labels. Some studies suggest quantum heads do; this would be a genuine finding either way. | about 1.5–2 h |
-| **Noise robustness:** evaluate the trained QCNN under simulated hardware noise (depolarising and readout errors) | Whether the accuracy holds on realistic near-term quantum hardware. | under 1 h; inference only |
-| **Real quantum hardware:** run test-set inference on an 8-qubit device (e.g. the IBM Quantum free tier) | Whether the model works outside simulation. Would be a novel result for this application. | limited by free QPU minutes; check the quota first |
-| **Larger or deeper circuits:** more qubits (via 16 angles) or repeated convolution layers | Whether circuit capacity limits accuracy. Compare against a classical head of matched size. | about 1–2 h per variant |
+| ~~Low-data regime:~~ train on 10%, 25% and 50% of the training images, with 5 repeats each, for both heads | Whether the QCNN degrades more gracefully than the classical head with few labels. | **Not planned** (decided November 2026). |
+| **Noise robustness:** evaluate the trained QCNN under simulated hardware noise (depolarising and readout errors) | Whether the accuracy holds on realistic near-term quantum hardware. | **Planned**, as the check before the real-hardware run. Under 1 h; inference only. |
+| **Real quantum hardware:** run test-set inference on an 8-qubit device (e.g. the IBM Quantum free tier) | Whether the model works outside simulation. Would be a novel result for this application. | **Planned, the last step.** Limited by free QPU minutes; check the quota first. |
+| ~~Larger or deeper circuits:~~ more qubits (via 16 angles) or repeated convolution layers | Whether circuit capacity limits accuracy. | **Not planned** (decided November 2026). |
 
 A careful negative result ("no advantage under a fair comparison") is also publishable, particularly
 at quantum machine learning venues.
 
-## C. Literature and writing
+## C. Literature and writing (planned)
 
 - **Check later papers on the same dataset.** Several papers after Altuntaş et al. (2019) used these
   3,000 images, for example work based on pre-trained CNNs, intuitionistic fuzzy sets and GLCM
@@ -99,16 +99,20 @@ at quantum machine learning venues.
 - **State the comparison caveats in the paper.** The test splits differ (450 images here, 900
   implied by their reported numbers), and the labels are putative ploidy from the R1-nj marker.
 
-## Suggested order
+## Plan (decided November 2026)
 
-1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the GTX 1650
-   for both 30 and 12 epochs).
+Three steps remain: the literature and writing tasks (section C), the workstation training and the
+real-hardware test. Everything else above is not planned, including any further work on accuracy
+beyond the workstation plan.
+
+1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the
+   GTX 1650 for both 30 and 12 epochs).
 2. **A: the workstation plan above**, when the workstation is available. The code is ready and was
    tested on the laptop (all backbones, parallel augmentation, the CUDA 13.0 build). bf16 mixed
    precision could not be tested on real hardware (the GTX 1650 has no bf16 support); the first smoke
    run on the workstation confirms it.
-3. **B: the low-data experiment on the same folds** (about 1.5–2 h on the laptop). Use 12 epochs,
-   since 30 did not help, unless the 3-seed check above shows otherwise. It can run on the laptop
-   in the meantime.
-4. **B: noise robustness**, then real hardware if the simulated-noise result holds up. Use the final
-   model from step 2, if there is one.
+3. **C: literature and writing**, now; it needs no training. Find the later papers on this dataset
+   and compare with the best published result, and state the comparison caveats in the paper.
+4. **B: real quantum hardware, the last step.** Inference only, with the final QCNN from step 2 (or
+   the reported one): first under simulated noise of the chosen IBM device, then on the device itself
+   if the simulated accuracy holds up. Compare with the noiseless simulator on the same test images.
