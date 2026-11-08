@@ -1,0 +1,8 @@
+{
+  "variant": "resnet18_224",
+  "seed": 0,
+  "backbone": "resnet18",
+  "img_size": 224,
+  "n_test": 450,
+  "exact_accuracy_no_tta": 0.9355555555555556
+}

@@ -1,0 +1,27 @@
+{
+  "mode": "noisy",
+  "backend": "FakeBrisbane",
+  "shots": 1000,
+  "seed": 0,
+  "seconds": 25.7,
+  "two_qubit_gates": 69,
+  "depth": 156,
+  "ops": {
+    "rz": 289,
+    "sx": 212,
+    "ecr": 69,
+    "x": 4,
+    "measure": 1
+  },
+  "n_images": 450,
+  "accuracy": 0.9311111111111111,
+  "exact_accuracy": 0.9355555555555556,
+  "sensitivity": 0.9510869565217391,
+  "specificity": 0.9172932330827067,
+  "changed_predictions": 2,
+  "only_this_run_right": 0,
+  "only_exact_right": 2,
+  "mcnemar_p": 0.5,
+  "mean_abs_z_error": 0.2406650138781468,
+  "saved": "2026-11-08T12:38:32"
+}

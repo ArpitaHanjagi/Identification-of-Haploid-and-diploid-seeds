@@ -1,0 +1,27 @@
+{
+  "mode": "noisy",
+  "backend": "FakeTorino",
+  "shots": 1000,
+  "seed": 0,
+  "seconds": 31.8,
+  "two_qubit_gates": 69,
+  "depth": 136,
+  "ops": {
+    "sx": 178,
+    "rz": 155,
+    "cz": 69,
+    "x": 19,
+    "measure": 1
+  },
+  "n_images": 450,
+  "accuracy": 0.9355555555555556,
+  "exact_accuracy": 0.9355555555555556,
+  "sensitivity": 0.9510869565217391,
+  "specificity": 0.924812030075188,
+  "changed_predictions": 2,
+  "only_this_run_right": 1,
+  "only_exact_right": 1,
+  "mcnemar_p": 1.0,
+  "mean_abs_z_error": 0.15988752852155105,
+  "saved": "2026-11-08T12:38:03"
+}

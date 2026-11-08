@@ -66,7 +66,12 @@ training, so that the final model is not tuned to the results:
 3. **Variants:** ResNet50 and ConvNeXt-Tiny, each at 224 and 384 px (4 variants), 5 folds, 12 epochs,
    both heads. Optionally EfficientNetV2-S at 384 px.
 4. **Same settings for everything:** 12 epochs, batch size 32, backbone learning rate 3e-4, seed 0,
-   identical for both heads. Any change is applied to all variants and both heads.
+   identical for both heads. Any change is applied to all variants and both heads. **Fixed in advance:**
+   if any variant stays at chance level (about 41%, always "diploid") in the speed test, the backbone
+   learning rate becomes 1e-4 for every variant and both heads (`--extra "--lr-backbone 1e-4"`). On the
+   laptop at batch size 8, ConvNeXt-Tiny at 384 px collapsed at 3e-4 but reached 94.3% after two
+   epochs at 1e-4; ResNet18, ResNet50 and ConvNeXt-Tiny at 224 px learned normally at 3e-4.
+   `run_workstation_plan.py --speed-test` flags such a variant.
 5. **Choosing the variant (cross-validation only):** the highest pooled final-epoch accuracy without
    TTA, averaged over the two heads. If a cheaper variant is within 0.5 points, take the cheaper one.
    One variant is chosen for both heads, so the QCNN vs classical comparison stays fair.
@@ -83,8 +88,8 @@ the workstation's times come from step 1.
 | Idea | What it tests | Extra GPU time (est.) |
 |---|---|---|
 | ~~Low-data regime:~~ train on 10%, 25% and 50% of the training images, with 5 repeats each, for both heads | Whether the QCNN degrades more gracefully than the classical head with few labels. | **Not planned** (decided November 2026). |
-| **Noise robustness:** evaluate the trained QCNN under simulated hardware noise (depolarising and readout errors) | Whether the accuracy holds on realistic near-term quantum hardware. | **Planned**, as the check before the real-hardware run. Under 1 h; inference only. |
-| **Real quantum hardware:** run test-set inference on an 8-qubit device (e.g. the IBM Quantum free tier) | Whether the model works outside simulation. Would be a novel result for this application. | **Planned, the last step.** Limited by free QPU minutes; check the quota first. |
+| ~~Noise robustness~~ under simulated hardware noise | Whether the accuracy holds on realistic near-term quantum hardware. | **Done** (November 2026) with the noise of IBM Fez, Torino and Brisbane: accuracy 93.56%, 93.56% and 93.11% vs 93.56% exact (at most 2 of 450 predictions change). See the README, section "Quantum hardware test". |
+| **Real quantum hardware:** run test-set inference on an 8-qubit device (e.g. the IBM Quantum free tier) | Whether the model works outside simulation. Would be a novel result for this application. | **Planned. Code ready and tested up to submission** (`09_quantum_hardware.py ibm`); needs an IBM Quantum account. Start with a 10-image trial to see the quota use. |
 | ~~Larger or deeper circuits:~~ more qubits (via 16 angles) or repeated convolution layers | Whether circuit capacity limits accuracy. | **Not planned** (decided November 2026). |
 
 A careful negative result ("no advantage under a fair comparison") is also publishable, particularly
@@ -109,7 +114,8 @@ by the authors; the evaluation protocols differ, so the figures are not directly
 | This project, cross-validation | ResNet18 + QCNN or classical head | 5-fold CV, 2,550 non-test images | 95.3 |
 
 † Not checked against the full text (publisher pages were not accessible): taken from an abstract
-excerpt or as cited by Cömert et al. (2025). Check these before submitting the paper.
+excerpt or as cited by Cömert et al. (2025). Check these before submitting the paper (deferred to the end
+of the plan: it needs college library access).
 
 - **What it means:** Altuntaş et al. is not the best published result. Four later studies report more
   than both of our test results (96–98%), but under different protocols; the highest (98.16%) has no
@@ -124,8 +130,8 @@ excerpt or as cited by Cömert et al. (2025). Check these before submitting the 
 
 ## Plan (decided November 2026)
 
-Two steps remain: the workstation training and the real-hardware test (section C, literature and
-writing, was done in November 2026). Everything else above is not planned, including any further work on accuracy
+Remaining: the workstation training, the real-hardware run and, last, checking three accuracy figures
+from the literature. Everything else above is not planned, including any further work on accuracy
 beyond the workstation plan.
 
 1. ~~A: 30 epochs plus 5-fold CV for both heads~~ (done, November 2026; about 2 h of training on the
@@ -136,6 +142,11 @@ beyond the workstation plan.
    run on the workstation confirms it.
 3. ~~C: literature and writing~~ (done, November 2026; see section C). Three accuracy figures still
    need checking against the full papers before submission.
-4. **B: real quantum hardware, the last step.** Inference only, with the final QCNN from step 2 (or
-   the reported one): first under simulated noise of the chosen IBM device, then on the device itself
-   if the simulated accuracy holds up. Compare with the noiseless simulator on the same test images.
+4. **B: real quantum hardware.** Inference only, with the final QCNN from step 2 (or the reported
+   one). The simulated-noise part is done for the reported QCNN (accuracy holds); the code for the
+   real device is ready. Needs an IBM Quantum account: a 10-image trial first, then all 450 images.
+   If step 2 produces a new final model, export it with `08_export_qcnn_inputs.py --variant ...` and
+   repeat the noisy simulation before the real run.
+5. **C: check the three unverified accuracy figures** in Table 7 of the research summary
+   (Dönmez 2022, 2023, 2024) against the full papers, when college library access is available.
+   Deferred to the end.

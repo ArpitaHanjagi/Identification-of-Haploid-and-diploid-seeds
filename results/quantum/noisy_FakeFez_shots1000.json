@@ -1,0 +1,27 @@
+{
+  "mode": "noisy",
+  "backend": "FakeFez",
+  "shots": 1000,
+  "seed": 0,
+  "seconds": 38.8,
+  "two_qubit_gates": 69,
+  "depth": 113,
+  "ops": {
+    "sx": 175,
+    "rz": 151,
+    "cz": 69,
+    "x": 21,
+    "measure": 1
+  },
+  "n_images": 450,
+  "accuracy": 0.9355555555555556,
+  "exact_accuracy": 0.9355555555555556,
+  "sensitivity": 0.9565217391304348,
+  "specificity": 0.9210526315789473,
+  "changed_predictions": 0,
+  "only_this_run_right": 0,
+  "only_exact_right": 0,
+  "mcnemar_p": 1.0,
+  "mean_abs_z_error": 0.12227358859148293,
+  "saved": "2026-11-08T12:37:15"
+}

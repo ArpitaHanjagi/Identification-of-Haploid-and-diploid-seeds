@@ -229,6 +229,16 @@ foreach ($f in 0..4) { foreach ($h in "qcnn", "classical") {
 .\.venv\Scripts\python.exe 07_cv_report.py
 ```
 
+**Or run the whole workstation plan with one command** ([run_workstation_plan.py](run_workstation_plan.py)):
+the setup check, the ResNet18 baseline with `--tag ws`, then ResNet50 and ConvNeXt-Tiny at 224 and
+384 px (5 folds × 2 heads × 12 epochs each), with the report after every variant. It stops at the first
+failure and continues where it stopped when started again; the log is `results/cv/workstation_log.txt`.
+
+```powershell
+.\.venv\Scripts\python.exe run_workstation_plan.py --speed-test   # setup check + time per variant
+.\.venv\Scripts\python.exe run_workstation_plan.py                # everything (add --dry-run to list the commands)
+```
+
 Runs of another backbone or size go to their own folder (`results/cv/resnet50_384/`), so they never
 mix with the ResNet18 results. To repeat runs that already exist from another PC, such as the
 ResNet18 baseline, add a tag: `--tag ws` writes to `results/cv/resnet18_224_ws/`. The report then
@@ -329,6 +339,66 @@ folds of 510 images; the pooled accuracy over all 2,550 images is the same numbe
 - **These numbers are not comparable with the test-set results above.** They come from different
   images and from models trained on 2,040 instead of 2,100 images. The test set was not used, so
   the reported test results stand unchanged.
+
+## Quantum hardware test
+
+This runs the trained QCNN's circuit outside PennyLane's noise-free simulator: with a finite number of
+measurements, with the simulated noise of real IBM devices, and on a real IBM quantum computer. Only
+the 8-qubit circuit runs there. The backbone computes the circuit's 8 input angles for each test image
+on an ordinary PC first. Nothing is trained: the final QCNN (seed 0) is only evaluated, without TTA
+(TTA would need 8 circuits per image).
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-quantum.txt   # Qiskit; changes nothing already installed
+.\.venv\Scripts\python.exe 08_export_qcnn_inputs.py          # input angles of the 450 test images
+.\.venv\Scripts\python.exe 09_quantum_hardware.py check      # the Qiskit circuit equals the trained one
+.\.venv\Scripts\python.exe 09_quantum_hardware.py ideal      # perfect device, 1,000 shots per image
+.\.venv\Scripts\python.exe 09_quantum_hardware.py noisy --fake FakeFez   # noise of IBM's Fez processor
+```
+
+**Simulated results** (450 test images, 1,000 shots each; the exact circuit without TTA scores 93.56%):
+
+| Run | Two-qubit gates after compiling | Accuracy | Predictions changed | McNemar p |
+|---|---|---|---|---|
+| Ideal device | — | 93.56% | 0 | 1.0 |
+| Noise of IBM Fez (Heron r2) | 69 | 93.56% | 0 | 1.0 |
+| Noise of IBM Torino (Heron r1) | 69 | 93.56% | 2 | 1.0 |
+| Noise of IBM Brisbane (Eagle) | 69 | 93.11% | 2 | 0.5 |
+
+The noise shrinks the circuit's output towards zero (Fez keeps 84% of it, Brisbane 68%) but rarely
+changes its sign. The trained decision boundary is almost exactly at zero (z = 0.007), and only 1.1% of
+the test images lie within 0.1 of it, so the predictions survive.
+
+**On a real IBM device.** This needs an IBM Quantum account (the free Open plan is enough). Each run
+uses some of the account's monthly quantum time, so start with a trial of 10 images:
+
+1. Create an account and an instance on [IBM Quantum Platform](https://quantum.cloud.ibm.com), then
+   copy your API key and the instance's CRN.
+2. Save them once on this PC:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -c "from qiskit_ibm_runtime import QiskitRuntimeService as S; S.save_account(token='YOUR_API_KEY', instance='YOUR_INSTANCE_CRN', set_as_default=True)"
+   ```
+
+3. Run a trial, check its usage on the IBM dashboard, then run all 450 images:
+
+   ```powershell
+   .\.venv\Scripts\python.exe 09_quantum_hardware.py ibm --backend ibm_fez --images 10 --wait
+   .\.venv\Scripts\python.exe 09_quantum_hardware.py ibm --backend ibm_fez
+   .\.venv\Scripts\python.exe 09_quantum_hardware.py collect results\quantum\ibm_job_<backend>_<time>.json
+   ```
+
+   Leave out `--backend` to use the least busy device. A job can wait in IBM's queue for minutes or
+   hours. Its ID is saved in `results/quantum/ibm_job_*.json` as soon as it is submitted, so `collect`
+   can fetch the result later. `09_quantum_hardware.py summary` lists every run.
+
+- **The test set is used here only to evaluate the fixed final model**, as in the reported results;
+  nothing is chosen from these runs.
+- **Another trained model:** `08_export_qcnn_inputs.py --variant resnet50_384` exports a workstation
+  model to `results/quantum/resnet50_384/`; pass `--folder results\quantum\resnet50_384` to
+  `09_quantum_hardware.py`.
+- **Outputs (`results/quantum/`):** `qcnn_inputs.npz` (angles, weights, exact outputs), one `.npz` and
+  `.json` per run (per-image outputs, accuracy, comparison with the exact circuit), and `summary.csv`.
 
 ## Outputs (`results/`)
 
